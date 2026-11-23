@@ -59,12 +59,14 @@ pub fn parse_message_segments(input: &str) -> Vec<MessageSegment> {
             }
         }
 
-        // Consume plain text until next special token.
+        // Consume plain text until next special token (UTF-8 safe).
+        let skip = rest.chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+        let tail = &rest[skip..];
         let next_special = [
-            rest[1..].find("```").map(|i| i + 1),
-            rest[1..].find("||").map(|i| i + 1),
-            rest[1..].find('`').map(|i| i + 1),
-            rest[1..].find('@').map(|i| i + 1),
+            tail.find("```").map(|i| i + skip),
+            tail.find("||").map(|i| i + skip),
+            tail.find('`').map(|i| i + skip),
+            tail.find('@').map(|i| i + skip),
         ]
         .into_iter()
         .flatten()
@@ -96,5 +98,11 @@ mod tests {
         assert!(segs.contains(&MessageSegment::InlineCode("cargo test".into())));
         assert!(segs.contains(&MessageSegment::Spoiler("secret".into())));
         assert!(segs.contains(&MessageSegment::CodeBlock("rust\nfn main() {}".into())));
+    }
+
+    #[test]
+    fn parses_multibyte_utf8_and_emojis_without_panicking() {
+        let segs = parse_message_segments("🚀🔥 café @user `code` ||spoiler||");
+        assert!(!segs.is_empty());
     }
 }

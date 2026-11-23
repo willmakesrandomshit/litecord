@@ -2384,3 +2384,27 @@ impl DiscordZeroApp {
         .into()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn send_message_with_emojis_markdown_and_plugins_does_not_panic() {
+        let (mut app, _) = DiscordZeroApp::new();
+        let _ = app.update(UiMessage::TogglePlugin("vencord.text-replace".into()));
+        let _ = app.update(UiMessage::TogglePlugin("vencord.commands".into()));
+
+        for sample in [
+            "hello world",
+            "🚀🔥 emoji message",
+            "/shrug",
+            "check `code` and ||spoiler|| and @litecord_pilot",
+        ] {
+            let _ = app.update(UiMessage::ComposerChanged(sample.into()));
+            let _ = app.update(UiMessage::SendMessage);
+            let _ = app.view();
+        }
+        assert!(app.state.current_messages().unwrap().len() >= 4);
+    }
+}
