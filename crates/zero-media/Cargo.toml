@@ -1,0 +1,12 @@
+[package]
+name = "zero-media"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cpal = "0.15"
+screenshots = "0.8"
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

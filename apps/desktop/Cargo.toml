@@ -1,0 +1,20 @@
+[package]
+name = "discord-zero"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono.workspace = true
+iced.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+zero-cache = { path = "../../crates/zero-cache" }
+zero-core = { path = "../../crates/zero-core" }
+zero-discord = { path = "../../crates/zero-discord" }
+zero-media = { path = "../../crates/zero-media" }
+zero-network = { path = "../../crates/zero-network" }
+zero-plugins = { path = "../../crates/zero-plugins" }
+zero-storage = { path = "../../crates/zero-storage" }
+zero-themes = { path = "../../crates/zero-themes" }
+zero-vencord = { path = "../../crates/zero-vencord" }

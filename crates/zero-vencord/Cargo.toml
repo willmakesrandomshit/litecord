@@ -1,0 +1,8 @@
+[package]
+name = "zero-vencord"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+zero-plugins = { path = "../zero-plugins" }
