@@ -24,7 +24,7 @@ use zero_network::{CredentialStore, OsCredentialStore};
 use zero_plugins::{PluginManager, PluginState, SettingValue};
 use zero_storage::Storage;
 use zero_themes::{parse_css_theme, ThemeManager};
-use zero_vencord::register_builtin_vencord_plugins;
+use zero_vencord::{install_custom_vencord_plugin, register_builtin_vencord_plugins};
 
 use theme::Palette;
 
@@ -44,9 +44,9 @@ pub fn main() -> iced::Result {
         )
         .init();
 
-    info!("Starting Discord Zero");
+    info!("Starting Litecord");
 
-    iced::application("Discord Zero", DiscordZeroApp::update, DiscordZeroApp::view)
+    iced::application("Litecord", DiscordZeroApp::update, DiscordZeroApp::view)
         .theme(DiscordZeroApp::theme)
         .window_size(Size::new(1240.0, 800.0))
         .run_with(DiscordZeroApp::new)
@@ -124,6 +124,10 @@ enum UiMessage {
     TogglePin(MessageId),
     TogglePinnedView,
     RevealSpoiler(MessageId),
+    NewChannelInputChanged(String),
+    CreateLocalChannel,
+    CustomPluginInputChanged(String),
+    ImportCustomPlugin,
 }
 
 struct DiscordZeroApp {
@@ -138,6 +142,9 @@ struct DiscordZeroApp {
     theme_manager: ThemeManager,
     css_theme_input: String,
     theme_import_status: Option<String>,
+    custom_plugin_input: String,
+    custom_plugin_status: Option<String>,
+    new_channel_input: String,
     audio_devices: AudioDeviceList,
     audio_settings: AudioSettings,
     mic_monitor: Option<MicMonitor>,
@@ -227,6 +234,11 @@ impl DiscordZeroApp {
                 ":root {\n  --background-primary: #141619;\n  --accent: #3ba55d;\n}",
             ),
             theme_import_status: None,
+            custom_plugin_input: String::from(
+                "definePlugin({ name: \"CustomEcho\", onBeforeSend: function(s) { return s; } });",
+            ),
+            custom_plugin_status: None,
+            new_channel_input: String::new(),
             audio_devices: AudioDeviceList::default(),
             audio_settings: AudioSettings::default(),
             mic_monitor: None,
@@ -350,9 +362,18 @@ impl DiscordZeroApp {
                 self.composer_input = val;
             }
             UiMessage::SendMessage => {
-                let transformed = self
-                    .plugin_manager
-                    .dispatch_before_send(&self.composer_input);
+                let raw_trimmed = self.composer_input.trim();
+                let after_cmd = if let Some(rest) = raw_trimmed.strip_prefix('/') {
+                    let mut parts = rest.splitn(2, ' ');
+                    let cmd = parts.next().unwrap_or("");
+                    let arg = parts.next().unwrap_or("");
+                    self.plugin_manager
+                        .dispatch_command(cmd, arg)
+                        .unwrap_or_else(|| self.composer_input.clone())
+                } else {
+                    self.composer_input.clone()
+                };
+                let transformed = self.plugin_manager.dispatch_before_send(&after_cmd);
                 if self.live_mode {
                     let content = transformed.trim().to_string();
                     if content.is_empty() {
@@ -378,6 +399,8 @@ impl DiscordZeroApp {
                     .capture_anchor(self.scroll_y, self.viewport_height);
                 let reply_to = self.replying_to.take();
                 if let Some(msg) = self.state.send_reply(&transformed, reply_to) {
+                    self.plugin_manager
+                        .emit_event("MESSAGE_CREATE", "{\"local\":true}");
                     if let Some(storage) = &self.storage {
                         if let Err(e) = storage.save_message(&msg) {
                             warn!("Failed to persist message: {e}");
@@ -786,6 +809,35 @@ impl DiscordZeroApp {
             UiMessage::RevealSpoiler(mid) => {
                 self.revealed_spoilers.insert(mid);
             }
+            UiMessage::NewChannelInputChanged(val) => {
+                self.new_channel_input = val;
+            }
+            UiMessage::CreateLocalChannel => {
+                if self
+                    .state
+                    .create_local_channel(&self.new_channel_input)
+                    .is_some()
+                {
+                    self.new_channel_input.clear();
+                    self.rebuild_timeline();
+                    return self.scroll_to_bottom_task();
+                }
+            }
+            UiMessage::CustomPluginInputChanged(val) => {
+                self.custom_plugin_input = val;
+            }
+            UiMessage::ImportCustomPlugin => {
+                let id = format!("custom.plugin.{}", self.plugin_manager.plugins().len() + 1);
+                let name = format!("Custom Plugin #{}", self.plugin_manager.plugins().len() + 1);
+                let analysis = install_custom_vencord_plugin(
+                    &mut self.plugin_manager,
+                    id,
+                    name,
+                    &self.custom_plugin_input,
+                );
+                self.custom_plugin_status =
+                    Some(format!("{} — {}", analysis.status.label(), analysis.reason));
+            }
         }
         iced::Task::none()
     }
@@ -970,6 +1022,24 @@ impl DiscordZeroApp {
                 }
                 list_col = list_col.push(self.view_channel_row(p, ch));
             }
+            list_col = list_col.push(
+                container(
+                    row![
+                        text_input("+ new-channel", &self.new_channel_input)
+                            .on_input(UiMessage::NewChannelInputChanged)
+                            .on_submit(UiMessage::CreateLocalChannel)
+                            .padding(Padding::from([4, 8]))
+                            .size(12)
+                            .width(Length::Fill),
+                        button(text("+").size(12))
+                            .padding(Padding::from([4, 8]))
+                            .on_press(UiMessage::CreateLocalChannel),
+                    ]
+                    .spacing(4)
+                    .align_y(Alignment::Center),
+                )
+                .padding(Padding::from([8, 2])),
+            );
         } else {
             list_col = list_col.push(
                 container(text("DIRECT MESSAGES").size(11).color(p.text_muted))
@@ -1346,7 +1416,7 @@ impl DiscordZeroApp {
             .as_ref()
             .is_some_and(|(id, _)| *id == msg.id);
 
-        let content_view: Element<'a, UiMessage> = if let Some((edit_id, edit_buf)) = self
+        let content_view: Element<'a, UiMessage> = if let Some((_edit_id, edit_buf)) = self
             .editing_message
             .as_ref()
             .filter(|(id, _)| *id == msg.id)
@@ -2038,7 +2108,7 @@ impl DiscordZeroApp {
 
         let content = column![
             row![
-                text("Discord Zero — Settings")
+                text("Litecord — Settings")
                     .size(22)
                     .color(p.text_primary),
                 Space::with_width(Length::Fill),
@@ -2186,6 +2256,25 @@ impl DiscordZeroApp {
             .size(16)
             .color(p.text_primary),
             plugin_col,
+            row![
+                text_input("Paste Vencord/JS plugin source...", &self.custom_plugin_input)
+                    .on_input(UiMessage::CustomPluginInputChanged)
+                    .padding(Padding::from([6, 10]))
+                    .size(12)
+                    .width(Length::Fill),
+                button(text("Import Plugin").size(12))
+                    .padding(Padding::from([6, 12]))
+                    .on_press(UiMessage::ImportCustomPlugin),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+            if let Some(st) = &self.custom_plugin_status {
+                text(st).size(11).color(p.text_muted)
+            } else {
+                text("Imported plugins are analyzed for Webpack dependencies and run inside the Boa JS sandbox.")
+                    .size(11)
+                    .color(p.text_muted)
+            },
             horizontal_rule(1),
             text("Voice & Audio Devices (Local Native I/O)")
                 .size(16)

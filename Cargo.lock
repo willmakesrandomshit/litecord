@@ -1164,25 +1164,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "discord-zero"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "iced",
- "tracing",
- "tracing-subscriber",
- "zero-cache",
- "zero-core",
- "zero-discord",
- "zero-media",
- "zero-network",
- "zero-plugins",
- "zero-storage",
- "zero-themes",
- "zero-vencord",
-]
-
-[[package]]
 name = "dispatch"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2794,6 +2775,25 @@ name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
+
+[[package]]
+name = "litecord"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "iced",
+ "tracing",
+ "tracing-subscriber",
+ "zero-cache",
+ "zero-core",
+ "zero-discord",
+ "zero-media",
+ "zero-network",
+ "zero-plugins",
+ "zero-storage",
+ "zero-themes",
+ "zero-vencord",
+]
 
 [[package]]
 name = "litemap"

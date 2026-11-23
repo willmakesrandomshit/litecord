@@ -29,11 +29,11 @@ impl ZeroState {
 
         let current_user = User {
             id: UserId(1),
-            username: "zero_pilot".into(),
-            display_name: "Zero Pilot".into(),
+            username: "litecord_pilot".into(),
+            display_name: "Litecord Pilot".into(),
             avatar_color: [88, 101, 242],
             status: UserStatus::Online,
-            custom_status: Some("Building Discord Zero in Rust".into()),
+            custom_status: Some("Running Litecord in native Rust".into()),
         };
 
         let alice = User {
@@ -79,8 +79,8 @@ impl ZeroState {
 
         let g1 = Guild {
             id: GuildId(100),
-            name: "Discord Zero HQ".into(),
-            short_name: "DZ".into(),
+            name: "Litecord HQ".into(),
+            short_name: "LC".into(),
             accent_color: [88, 101, 242],
             member_ids: vec![UserId(1), UserId(2), UserId(3), UserId(4), UserId(5)],
             channels: vec![
@@ -424,6 +424,36 @@ impl ZeroState {
         self.current_messages()
             .map(|q| q.iter().filter(|m| m.pinned).collect())
             .unwrap_or_default()
+    }
+
+    pub fn create_local_channel(&mut self, raw_name: &str) -> Option<ChannelId> {
+        let clean = raw_name.trim().to_lowercase().replace(' ', "-");
+        if clean.is_empty() {
+            return None;
+        }
+        let gid = self.selected_guild?;
+        let new_id = ChannelId(
+            self.guilds
+                .iter()
+                .flat_map(|g| g.channels.iter().map(|c| c.id.0))
+                .max()
+                .unwrap_or(1000)
+                + 1,
+        );
+        if let Some(guild) = self.guilds.iter_mut().find(|g| g.id == gid) {
+            guild.channels.push(Channel {
+                id: new_id,
+                guild_id: Some(gid),
+                category: Some("GENERAL".into()),
+                name: clean,
+                topic: Some("Created locally in Litecord".into()),
+                kind: ChannelKind::Text,
+                unread_count: 0,
+            });
+            self.select_channel(new_id);
+            return Some(new_id);
+        }
+        None
     }
 
     pub fn toggle_reaction(&mut self, message_id: MessageId, emoji: &str) {

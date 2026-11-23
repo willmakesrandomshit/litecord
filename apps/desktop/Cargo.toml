@@ -1,5 +1,5 @@
 [package]
-name = "discord-zero"
+name = "litecord"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

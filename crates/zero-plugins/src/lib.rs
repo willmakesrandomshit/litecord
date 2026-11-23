@@ -438,6 +438,56 @@ impl PluginManager {
         current
     }
 
+    /// Executes a registered slash command (e.g. `/shrug`, `/mock hello`) across active plugins.
+    pub fn dispatch_command(&mut self, cmd: &str, args: &str) -> Option<String> {
+        if self.active_count() == 0 {
+            return None;
+        }
+        let sb = self.sandbox.as_mut()?;
+        let safe_cmd = serde_json::to_string(cmd).ok()?;
+        let safe_args = serde_json::to_string(args).ok()?;
+        let script = format!(
+            "(function() {{\n\
+                if (typeof __zero_dispatch_command === 'function') {{\n\
+                    var res = __zero_dispatch_command({safe_cmd}, {safe_args});\n\
+                    return (typeof res === 'string') ? res : '';\n\
+                }}\n\
+                return '';\n\
+            }})();"
+        );
+        match sb.eval(&script) {
+            Ok(val) => val
+                .as_string()
+                .map(|s| s.to_std_string_escaped())
+                .filter(|s| !s.is_empty()),
+            Err(e) => {
+                self.push_log(format!("Command '/{cmd}' error: {e}"));
+                None
+            }
+        }
+    }
+
+    /// Emits a Flux-style event (e.g. `MESSAGE_CREATE`) to subscribed active plugins.
+    pub fn emit_event(&mut self, event: &str, payload_json: &str) {
+        if self.active_count() == 0 {
+            return;
+        }
+        let Some(sb) = self.sandbox.as_mut() else {
+            return;
+        };
+        let Ok(safe_evt) = serde_json::to_string(event) else {
+            return;
+        };
+        let script = format!(
+            "if (typeof FluxDispatcher !== 'undefined' && typeof FluxDispatcher.dispatch === 'function') {{\n\
+                FluxDispatcher.dispatch({{ type: {safe_evt}, payload: {payload_json} }});\n\
+            }}"
+        );
+        if let Err(e) = sb.eval(&script) {
+            self.push_log(format!("Event '{event}' error: {e}"));
+        }
+    }
+
     pub fn export_config(&self) -> PersistedPluginConfig {
         let mut cfg = PersistedPluginConfig::default();
         for p in &self.plugins {
